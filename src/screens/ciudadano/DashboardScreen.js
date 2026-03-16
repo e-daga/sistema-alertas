@@ -4,18 +4,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
+import { getAlertEffectiveState, isAlertFinalForClient } from "../../services/alertState";
 import { getCurrentLocation } from "../../services/location";
+import { getAlertId } from "../../services/alertUtils";
 import HamburgerMenu from "../../components/HamburgerMenu";
-
-const FINAL_STATES = new Set(["cerrada", "cancelada", "expirada"]);
-
-function getAlertId(alerta) {
-  return alerta?.id || alerta?._id || null;
-}
-
-function isFinalState(state) {
-  return FINAL_STATES.has(String(state || "").toLowerCase());
-}
 
 function isNetworkError(error) {
   const code = String(error?.code || "").toUpperCase();
@@ -35,7 +27,7 @@ function normalizeAlertsPayload(payload) {
 function getCitizenStatusLabel(state) {
   const normalized = String(state || "").toLowerCase();
   if (normalized === "confirmando") return "En confirmacion";
-  if (normalized === "activa") return "Activa";
+  if (normalized === "activa") return "Buscando unidad";
   if (normalized === "asignada") return "Ayuda en camino";
   if (normalized === "atendiendo") return "Unidad atendiendo";
   if (normalized === "cerrada") return "Cerrada";
@@ -61,8 +53,9 @@ export default function DashboardScreen({ navigation, route }) {
   const handleClosedAlert = useCallback(
     (closedAlert) => {
       const id = String(getAlertId(closedAlert) || "");
-      if (!id) return;
-      if (lastClosedAlertIdRef.current === id) return;
+      if (!id || lastClosedAlertIdRef.current === id) {
+        return;
+      }
 
       lastClosedAlertIdRef.current = id;
       setActiveAlert(null);
@@ -83,8 +76,9 @@ export default function DashboardScreen({ navigation, route }) {
       if (trackedId) {
         const tracked = alerts.find((item) => String(getAlertId(item) || "") === String(trackedId));
         if (tracked) {
-          if (isFinalState(tracked?.estado)) {
-            if (String(tracked?.estado || "").toLowerCase() === "cerrada") {
+          const trackedState = getAlertEffectiveState(tracked);
+          if (isAlertFinalForClient(tracked)) {
+            if (trackedState === "cerrada") {
               handleClosedAlert(tracked);
             } else {
               setActiveAlert(null);
@@ -96,7 +90,7 @@ export default function DashboardScreen({ navigation, route }) {
         }
       }
 
-      const foundActive = alerts.find((item) => !isFinalState(item?.estado));
+      const foundActive = alerts.find((item) => !isAlertFinalForClient(item));
       setActiveAlert(foundActive || null);
     } catch {
       // Si falla consulta, conservamos estado local actual.
@@ -121,7 +115,9 @@ export default function DashboardScreen({ navigation, route }) {
 
   useEffect(() => {
     const createdAlert = route?.params?.createdAlert;
-    if (!createdAlert) return;
+    if (!createdAlert) {
+      return;
+    }
 
     setActiveAlert(createdAlert);
     navigation.setParams({ createdAlert: undefined });
@@ -152,7 +148,7 @@ export default function DashboardScreen({ navigation, route }) {
     [logout, navigation],
   );
 
-  const hasActiveAlert = Boolean(activeAlert && !isFinalState(activeAlert?.estado));
+  const hasActiveAlert = Boolean(activeAlert && !isAlertFinalForClient(activeAlert));
 
   const createAlert = async (tipo) => {
     if (hasActiveAlert) {
@@ -160,34 +156,41 @@ export default function DashboardScreen({ navigation, route }) {
       return;
     }
 
+    let requestedLocation = null;
+    const localCreatedAt = new Date().toISOString();
+
     try {
       setCreatingType(tipo);
-      const location = await getCurrentLocation();
+      requestedLocation = await getCurrentLocation();
 
       const payload = {
         tipo,
-        lat: Number(location.lat),
-        lng: Number(location.lng),
+        lat: Number(requestedLocation.lat),
+        lng: Number(requestedLocation.lng),
       };
 
       const response = await api.post("/alertas", payload);
-      const alertPayload = response?.data?.alerta || response?.data;
+      const alertPayload = response?.data?.alerta || response?.data || {};
+      const nextAlert = {
+        ...alertPayload,
+        tipo,
+        lat: payload.lat,
+        lng: payload.lng,
+        fecha_creacion: alertPayload?.fecha_creacion || localCreatedAt,
+        local_created_at: localCreatedAt,
+      };
 
-      setActiveAlert(alertPayload || null);
-
-      navigation.navigate("AlertCreated", {
-        mode: "sent",
-        alert: alertPayload,
-        autoReturn: true,
-      });
+      setActiveAlert(nextAlert);
+      Alert.alert("Alerta enviada", "Tu alerta ya fue enviada correctamente.");
     } catch (error) {
       if (isNetworkError(error)) {
         navigation.navigate("AlertCreated", {
           mode: "pending",
           pendingAlert: {
             tipo,
-            lat: Number(activeAlertRef.current?.lat) || undefined,
-            lng: Number(activeAlertRef.current?.lng) || undefined,
+            lat: Number(requestedLocation?.lat),
+            lng: Number(requestedLocation?.lng),
+            createdAt: localCreatedAt,
           },
           fallbackLocationRequest: true,
           fallbackTipo: tipo,
@@ -214,21 +217,22 @@ export default function DashboardScreen({ navigation, route }) {
         </View>
       </View>
 
-      <Text style={styles.welcome}>Bienvenido, {user?.nombre || "Juan Perez"}</Text>
-      <Text style={styles.caption}>En caso de emergencia presione un boton</Text>
+      <Text style={styles.welcome}>Bienvenido, {user?.nombre || "Usuario"}</Text>
+      <Text style={styles.caption}>En caso de emergencia presiona un boton</Text>
 
-      {hasActiveAlert && (
+      {hasActiveAlert ? (
         <View style={styles.activeAlertCard}>
           <View style={styles.activeAlertHeader}>
             <Ionicons name="notifications-outline" size={18} color="#1D4ED8" />
             <Text style={styles.activeAlertTitle}>Alerta en curso</Text>
           </View>
-          <Text style={styles.activeAlertText}>Estado: {getCitizenStatusLabel(activeAlert?.estado)}</Text>
+          <Text style={styles.activeAlertText}>Estado: {getCitizenStatusLabel(getAlertEffectiveState(activeAlert))}</Text>
+          <Text style={styles.activeAlertHint}>Si aun esta en confirmacion, podras cancelarla desde seguimiento durante los primeros 30 segundos.</Text>
           <Pressable style={styles.activeAlertButton} onPress={() => navigation.navigate("HelpOnTheWay", { alert: activeAlert })}>
             <Text style={styles.activeAlertButtonText}>Ver seguimiento</Text>
           </Pressable>
         </View>
-      )}
+      ) : null}
 
       <View style={[styles.card, styles.blueCard, hasActiveAlert && styles.disabledCard]}>
         <View style={[styles.iconCircle, styles.blueCircle]}>
@@ -340,6 +344,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: "#1E3A8A",
     fontSize: 13,
+  },
+  activeAlertHint: {
+    marginTop: 6,
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 18,
   },
   activeAlertButton: {
     marginTop: 10,

@@ -1,17 +1,41 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
+import { getAlertEffectiveState, isAlertFinalForClient } from "../../services/alertState";
+import { formatDateTime, getAlertId } from "../../services/alertUtils";
 
-export default function PerfilScreen() {
+function normalizeAlertsPayload(payload) {
+  const list = payload?.alertas || payload?.data || payload;
+  return Array.isArray(list) ? list : [];
+}
+
+function getCitizenStatusLabel(state) {
+  const normalized = String(state || "").toLowerCase();
+  if (normalized === "confirmando") return "En confirmacion";
+  if (normalized === "activa") return "Buscando unidad";
+  if (normalized === "asignada") return "Ayuda en camino";
+  if (normalized === "atendiendo") return "Unidad atendiendo";
+  if (normalized === "cerrada") return "Cerrada";
+  if (normalized === "cancelada") return "Cancelada";
+  if (normalized === "expirada") return "Expirada";
+  return "En proceso";
+}
+
+export default function PerfilScreen({ navigation }) {
   const { user, updateUser, logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [latestAlert, setLatestAlert] = useState(null);
 
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
+
+  const trackedAlertIdRef = useRef("");
+  const handledClosedAlertIdRef = useRef("");
 
   const loadProfile = async () => {
     try {
@@ -31,9 +55,59 @@ export default function PerfilScreen() {
     }
   };
 
+  const refreshLatestAlert = useCallback(async () => {
+    try {
+      const response = await api.get("/mobile/ciudadano/mis-alertas", {
+        params: { pagina: 1, limite: 10 },
+      });
+
+      const alerts = normalizeAlertsPayload(response?.data);
+      const activeAlert = alerts.find((item) => !isAlertFinalForClient(item));
+      const latest = activeAlert || alerts[0] || null;
+      setLatestAlert(latest);
+
+      if (activeAlert) {
+        trackedAlertIdRef.current = String(getAlertId(activeAlert) || "");
+        return;
+      }
+
+      if (!trackedAlertIdRef.current) {
+        return;
+      }
+
+      const trackedAlert = alerts.find((item) => String(getAlertId(item) || "") === trackedAlertIdRef.current);
+      const trackedState = trackedAlert ? getAlertEffectiveState(trackedAlert) : "expirada";
+
+      if (trackedAlert && trackedState === "cerrada" && handledClosedAlertIdRef.current !== trackedAlertIdRef.current) {
+        handledClosedAlertIdRef.current = trackedAlertIdRef.current;
+        trackedAlertIdRef.current = "";
+        navigation.navigate("AlertClosed", { alert: trackedAlert });
+        return;
+      }
+
+      if (!trackedAlert || trackedState === "cancelada" || trackedState === "expirada") {
+        trackedAlertIdRef.current = "";
+      }
+    } catch {
+      // Si falla la consulta, dejamos la ultima informacion cargada.
+    }
+  }, [navigation]);
+
   useEffect(() => {
     loadProfile();
-  }, []);
+    refreshLatestAlert();
+  }, [refreshLatestAlert]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshLatestAlert();
+      const interval = setInterval(() => {
+        refreshLatestAlert();
+      }, 12000);
+
+      return () => clearInterval(interval);
+    }, [refreshLatestAlert]),
+  );
 
   const saveProfile = async () => {
     try {
@@ -62,6 +136,8 @@ export default function PerfilScreen() {
     );
   }
 
+  const latestState = latestAlert ? getAlertEffectiveState(latestAlert) : null;
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
@@ -72,6 +148,21 @@ export default function PerfilScreen() {
       </View>
 
       <Text style={styles.subtitle}>Revisa tu informacion personal</Text>
+
+      {latestAlert ? (
+        <View style={styles.alertCard}>
+          <View style={styles.alertHeader}>
+            <Ionicons name="pulse-outline" size={18} color="#1D4ED8" />
+            <Text style={styles.alertTitle}>Estado de tu ultima alerta</Text>
+          </View>
+          <Text style={styles.alertLine}>Estado: {getCitizenStatusLabel(latestState)}</Text>
+          <Text style={styles.alertLine}>Tipo: {latestAlert?.tipo || "Sin tipo"}</Text>
+          <Text style={styles.alertLine}>Creada: {formatDateTime(latestAlert?.fecha_creacion)}</Text>
+          {latestState === "cerrada" ? (
+            <Text style={styles.alertClosed}>Tu alerta ya se cerro. Si aplica, te mostraremos la pantalla de calificacion.</Text>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <View style={styles.avatarWrap}>
@@ -115,6 +206,35 @@ const styles = StyleSheet.create({
   editButton: { backgroundColor: "#111827", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 10, minWidth: 95, alignItems: "center" },
   editButtonText: { color: "#FFFFFF", fontWeight: "600", fontSize: 12 },
   subtitle: { marginTop: 2, color: "#6B7280", fontSize: 13 },
+  alertCard: {
+    marginTop: 12,
+    backgroundColor: "#EFF6FF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    padding: 12,
+  },
+  alertHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  alertTitle: {
+    color: "#1E3A8A",
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  alertLine: {
+    marginTop: 6,
+    color: "#1E3A8A",
+    fontSize: 12,
+  },
+  alertClosed: {
+    marginTop: 8,
+    color: "#475569",
+    fontSize: 12,
+    lineHeight: 18,
+  },
   card: { marginTop: 12, backgroundColor: "#FFFFFF", borderRadius: 16, borderWidth: 1, borderColor: "#111827", padding: 12 },
   avatarWrap: { alignSelf: "center", width: 58, height: 58, borderRadius: 29, backgroundColor: "#2563EB", alignItems: "center", justifyContent: "center" },
   name: { marginTop: 8, textAlign: "center", color: "#1F2937", fontWeight: "700", fontSize: 32 },

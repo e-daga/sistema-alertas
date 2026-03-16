@@ -1,6 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import api from "../../services/api";
+import { getAlertCreatedAt, getAlertEffectiveState } from "../../services/alertState";
+
+function formatAlertState(item) {
+  const state = getAlertEffectiveState(item);
+  return state ? state.charAt(0).toUpperCase() + state.slice(1) : "N/A";
+}
+
+function formatAlertDate(item) {
+  const createdAt = getAlertCreatedAt(item);
+  return createdAt ? createdAt.toLocaleString() : "Sin fecha";
+}
 
 export default function HistorialScreen() {
   const [loading, setLoading] = useState(true);
@@ -49,8 +60,8 @@ export default function HistorialScreen() {
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item?.tipo || "Alerta"}</Text>
-            <Text style={styles.cardSubtitle}>Estado: {item?.estado || "N/A"}</Text>
-            <Text style={styles.cardMeta}>{item?.created_at || item?.fecha || "Sin fecha"}</Text>
+            <Text style={styles.cardSubtitle}>Estado: {formatAlertState(item)}</Text>
+            <Text style={styles.cardMeta}>{formatAlertDate(item)}</Text>
           </View>
         )}
       />

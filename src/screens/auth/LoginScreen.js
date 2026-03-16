@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/AuthContext";
 import api from "../../services/api";
+import { hasExtendedProfile, loadLocalExtendedProfile } from "../../services/localExtendedProfile";
 
 function showDeveloperErrorHint(rawError) {
   const message =
@@ -50,7 +51,7 @@ async function fetchCitizenProfile(accessToken, refreshToken) {
 }
 
 function hasCitizenProfile(user) {
-  return Boolean((user?.nombre || "").trim() && (user?.telefono || "").trim());
+  return Boolean((user?.nombre || "").trim() && (user?.telefono || "").trim() && hasExtendedProfile(user));
 }
 
 export default function LoginScreen({ navigation }) {
@@ -140,9 +141,15 @@ export default function LoginScreen({ navigation }) {
         citizenProfile = {};
       }
 
+      const localExtendedProfile = await loadLocalExtendedProfile({
+        ...(session.user || {}),
+        ...(citizenProfile || {}),
+      });
+
       session.user = {
         ...session.user,
         ...citizenProfile,
+        ...localExtendedProfile,
       };
 
       const acceptedTerms = Boolean(session.user?.terminos_aceptados);
@@ -245,4 +252,3 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 });
-
