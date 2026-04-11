@@ -26,8 +26,8 @@ export default function AccountCreatedScreen({ route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Cuenta creada</Text>
-      <Text style={styles.subtitle}>Tu perfil ya esta listo. Ahora puedes entrar al sistema de emergencias.</Text>
+      <Text style={styles.title}>¡Listo!</Text>
+      <Text style={styles.subtitle}>Tu cuenta esta configurada. Ahora puedes usar el sistema de emergencias.</Text>
 
       <Pressable style={styles.primaryButton} onPress={handleFinish}>
         {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>Entrar al sistema</Text>}

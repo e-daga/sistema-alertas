@@ -4,6 +4,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from "rea
 import { Ionicons } from "@expo/vector-icons";
 import api from "../../services/api";
 import { loadTenantSelection } from "../../services/tenantAccess";
+import { useAuth } from "../../context/AuthContext";
 
 function showDeveloperErrorHint(rawError) {
   const message =
@@ -28,6 +29,7 @@ function showNetworkHint(rawError) {
 }
 
 export default function LoginScreen({ navigation }) {
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
 
   const forceAccountChooser = async (GoogleSignin) => {
@@ -101,14 +103,17 @@ export default function LoginScreen({ navigation }) {
       const role = String(usuario.rol || usuario.role || "ciudadano").toLowerCase();
 
       if (role !== "ciudadano") {
-        navigation.navigate("AccountCreated", { session });
+        // Policia/paramedico: entrar directo sin pantalla de bienvenida
+        await login(session);
       } else {
+        // Ciudadano nuevo: necesita aceptar terminos y completar perfil
         if (!usuario.terminos_aceptados) {
           navigation.navigate("Terms", { session });
         } else if (!usuario.telefono || !usuario.estado || !usuario.municipio) {
           navigation.navigate("CompleteProfile", { session });
         } else {
-          navigation.navigate("AccountCreated", { session });
+          // Ciudadano ya registrado: entrar directo
+          await login(session);
         }
       }
     } catch (error) {

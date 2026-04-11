@@ -119,12 +119,18 @@ function buildNotificationFromPush(notification, role) {
   const content = notification?.request?.content || {};
   const data = hydrateNotificationPayload(content?.data && typeof content.data === "object" ? content.data : {});
   const type = data?.notificationKind || data?.type || data?.action || "push";
+  const alertId = data?.alertaId || data?.alerta_id || data?.id || data?.alert?.id || "";
+
+  // Usar el mismo formato de dedupeKey que el handler de socket para evitar duplicados
+  // cuando llegan tanto por push (FCM) como por websocket simultaneamente
+  const dedupeKey = alertId ? `socket-${alertId}-${type}` : null;
 
   return normalizeNotification(
     {
       title: content?.title || "Nueva notificacion",
       body: content?.body || "",
       type,
+      dedupeKey,
       payload: data,
     },
     role,
