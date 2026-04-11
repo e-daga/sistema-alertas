@@ -1,5 +1,24 @@
 import { getAlertCreatedAt } from "./alertState";
-import { getAgeRangeLabel } from "./profileCatalogs";
+import { getAgeRangeLabel, getAgeNumber } from "./profileCatalogs";
+
+// Grupos etarios con nombres claros para el panel de policia/paramedico
+const AGE_GROUPS = [
+  { min: 0,  max: 11,  label: "Nino/a" },
+  { min: 12, max: 17,  label: "Adolescente" },
+  { min: 18, max: 29,  label: "Adulto joven" },
+  { min: 30, max: 45,  label: "Adulto" },
+  { min: 46, max: 64,  label: "Adulto mayor" },
+  { min: 65, max: 999, label: "Adulto mayor (65+)" },
+];
+
+function ageGroupLabel(numericAge) {
+  if (!numericAge || !Number.isFinite(numericAge) || numericAge <= 0) {
+    return null;
+  }
+  const group = AGE_GROUPS.find((g) => numericAge >= g.min && numericAge <= g.max);
+  return group ? group.label : null;
+}
+
 
 const REPORT_TYPE_PATTERN = /^\[Tipo atendido:\s*(.+?)\]\s*(?:\r?\n\r?\n)?([\s\S]*)$/i;
 
@@ -151,14 +170,16 @@ export function citizenAgeText(alert) {
     alert?.ciudadano_edad_texto;
   const ageText = getAgeRangeLabel(directAgeValue, directAgeText);
   if (ageText) {
-    return ageText;
+    // Convertir el rango textual a numero para obtener el grupo
+    const numeric = getAgeNumber(ageText) || getAgeNumber(directAgeValue);
+    return ageGroupLabel(numeric) || ageText;
   }
 
   const directAge = directAgeValue;
   if (directAge !== undefined && directAge !== null && String(directAge).trim()) {
     const numericAge = Number(directAge);
     if (Number.isFinite(numericAge) && numericAge > 0) {
-      return getAgeRangeLabel(numericAge) || `${numericAge} anios`;
+      return ageGroupLabel(numericAge) || `${numericAge} anios`;
     }
 
     return String(directAge).trim();
