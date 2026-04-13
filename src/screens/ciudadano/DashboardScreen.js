@@ -8,8 +8,6 @@ import { getAlertEffectiveState, isAlertFinalForClient } from "../../services/al
 import { getCurrentLocation } from "../../services/location";
 import { getAlertId } from "../../services/alertUtils";
 import HamburgerMenu from "../../components/HamburgerMenu";
-import { getCitizenWelcomeWord } from "../../services/profileCatalogs";
-import { cacheCitizenLocationForWidget, setCachedCitizenLocationForWidget } from "../../services/citizenLocationCache";
 
 function isNetworkError(error) {
   const code = String(error?.code || "").toUpperCase();
@@ -104,7 +102,6 @@ export default function DashboardScreen({ navigation, route }) {
   useFocusEffect(
     useCallback(() => {
       refreshCitizenAlertState();
-      cacheCitizenLocationForWidget();
     }, [refreshCitizenAlertState]),
   );
 
@@ -172,8 +169,6 @@ export default function DashboardScreen({ navigation, route }) {
         lng: Number(requestedLocation.lng),
       };
 
-      await setCachedCitizenLocationForWidget(payload.lat, payload.lng).catch(() => {});
-
       const response = await api.post("/alertas", payload);
       const alertPayload = response?.data?.alerta || response?.data || {};
       const nextAlert = {
@@ -221,9 +216,8 @@ export default function DashboardScreen({ navigation, route }) {
           <Text style={styles.topbarText}>Sistema de Alertas</Text>
         </View>
       </View>
-      <Text style={styles.welcome}>
-        {getCitizenWelcomeWord(user?.genero)}, {user?.nombre || "Usuario"}
-      </Text>
+
+      <Text style={styles.welcome}>Bienvenido, {user?.nombre || "Usuario"}</Text>
       <Text style={styles.caption}>En caso de emergencia presiona un boton</Text>
 
       {hasActiveAlert ? (

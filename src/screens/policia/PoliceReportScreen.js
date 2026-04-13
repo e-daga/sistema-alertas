@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../services/api";
 import { composeReportDescription } from "../../services/alertUtils";
 import { POLICE_INCIDENT_TYPES } from "../../services/reportCatalogs";
@@ -82,13 +81,6 @@ export default function PoliceReportScreen({ navigation, route }) {
       await api.post(`/reportes/alerta/${alertId}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
       try {
         await api.patch(`/mobile/asignaciones/${alertId}/estado`, { estado: "cerrada" });
-      } catch {}
-
-      // FORZAMOS LA DISPONIBILIDAD: El backend falla al liberar al personal después de un reporte, 
-      // así que lo ponemos disponible manualmente.
-      try {
-        await api.patch("/mobile/personal/estado", { disponible: true });
-        await AsyncStorage.setItem("@personal:disponible", "true");
       } catch {}
 
       Alert.alert("Exito", "Reporte enviado correctamente");

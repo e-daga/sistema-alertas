@@ -1,7 +1,10 @@
-import api from "./api";
-import React from "react";
-import { FlexWidget, TextWidget, requestWidgetUpdate } from "react-native-android-widget";
-import { readCachedCitizenLocationForWidget } from "./citizenLocationCache";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import React from 'react';
+import { FlexWidget, TextWidget, Action, requestWidgetUpdate } from "react-native-android-widget";
+
+const BASE_URL = "https://backend-emergencias.onrender.com/api";
+const ACCESS_TOKEN_KEY = "@auth:token";
 
 function PanicWidgetUi() {
   return (
@@ -75,43 +78,47 @@ function PanicWidgetUi() {
 }
 
 export async function widgetTaskHandler(props) {
-  const { widgetAction, clickAction, widgetInfo, renderWidget: renderWidgetToNative } = props;
-  // Los toques del widget llegan en `clickAction`, no en `widgetAction` (ver registerHeadlessTask del paquete).
-  const tapKind = clickAction || widgetAction;
+  const { widgetAction, widgetInfo } = props;
 
-  const shouldRefreshUi =
+  if (
     widgetAction === "WIDGET_ADDED" ||
     widgetAction === "WIDGET_UPDATE" ||
     widgetAction === "WIDGET_RESIZED" ||
-    tapKind === "ALERTA_PANICO" ||
-    tapKind === "ALERTA_MEDICA";
-
-  if (!shouldRefreshUi) {
-    return;
-  }
-
-  if (tapKind === "ALERTA_PANICO" || tapKind === "ALERTA_MEDICA") {
-    try {
-      const tipo = tapKind === "ALERTA_PANICO" ? "panico" : "medica";
-      const cached = await readCachedCitizenLocationForWidget();
-      const lat = cached?.lat ?? 0;
-      const lng = cached?.lng ?? 0;
-      await api.post("/alertas", { tipo, lat, lng });
-      console.log("Widget: Alerta enviada correctamente, tipo:", tipo);
-    } catch (error) {
-      console.error("Widget: Error al enviar alerta", error?.message);
+    widgetAction === "ALERTA_PANICO" ||
+    widgetAction === "ALERTA_MEDICA"
+  ) {
+    if (widgetAction === "ALERTA_PANICO" || widgetAction === "ALERTA_MEDICA") {
+      try {
+        const accessToken = await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
+        if (accessToken) {
+          const tipo = widgetAction === "ALERTA_PANICO" ? "panico" : "medica";
+          await axios.post(
+            `${BASE_URL}/alertas`,
+            {
+              tipo,
+              lat: 0,
+              lng: 0,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "x-plataforma": "mobile",
+              },
+            }
+          );
+          console.log("Widget: Alerta de pánico enviada correctamente");
+        }
+      } catch (error) {
+        console.error("Widget: Error al enviar alerta", error?.message);
+      }
     }
-  }
 
-  try {
-    if (typeof renderWidgetToNative === "function") {
-      renderWidgetToNative(<PanicWidgetUi />);
-    } else {
+    try {
       requestWidgetUpdate({
         widgetName: "PanicButtonWidget",
         renderWidget: () => <PanicWidgetUi />,
         widgetInfo,
       });
-    }
-  } catch {}
+    } catch {}
+  }
 }

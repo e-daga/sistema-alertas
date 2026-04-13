@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../../services/api";
 import { composeReportDescription } from "../../services/alertUtils";
 import { AMBULANCE_INCIDENT_TYPES } from "../../services/reportCatalogs";
@@ -65,13 +64,7 @@ export default function AmbulanceReportScreen({ navigation, route }) {
         formData.append("fotos", { uri: photo.uri, type: photo.mimeType || "image/jpeg", name: photo.fileName || `foto_${index + 1}.jpg` });
       });
       await api.post(`/reportes/alerta/${alertId}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
-      try {
-        await api.patch(`/mobile/asignaciones/${alertId}/estado`, { estado: "cerrada" });
-      } catch {}
-      try {
-        await api.patch("/mobile/personal/estado", { disponible: true });
-        await AsyncStorage.setItem("@personal:disponible", "true");
-      } catch {}
+      try { await api.patch(`/mobile/asignaciones/${alertId}/estado`, { estado: "cerrada" }); } catch {}
       Alert.alert("Exito", "Reporte enviado correctamente");
       navigation.popToTop();
     } catch (error) {

@@ -25,29 +25,6 @@ const STATE_ALIAS_MAP = {
 export const STATE_OPTIONS = Object.keys(MUNICIPALITIES_CATALOG).sort((a, b) => a.localeCompare(b, "es-MX"));
 export const GENDER_OPTIONS = ["Femenino", "Masculino"];
 
-/** Saludo en pantalla principal ciudadano segun genero guardado en perfil. */
-export function getCitizenWelcomeWord(genero) {
-  const raw = String(genero || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim();
-  if (!raw) {
-    return "Bienvenido";
-  }
-  if (
-    raw === "f" ||
-    raw.startsWith("fem") ||
-    raw.includes("mujer") ||
-    raw.includes("woman") ||
-    raw.includes("female") ||
-    raw.includes("dama")
-  ) {
-    return "Bienvenida";
-  }
-  return "Bienvenido";
-}
-
 const MIN_AGE_OPTION = 12;
 const MAX_AGE_OPTION = 100;
 

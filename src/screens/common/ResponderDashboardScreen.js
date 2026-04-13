@@ -1,6 +1,5 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native";
 import {
   ActivityIndicator,
   Alert,
@@ -263,13 +262,6 @@ export default function ResponderDashboardScreen({ navigation, variant = "polici
   useEffect(() => {
     loadAvailability();
   }, [loadAvailability]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadAvailability();
-      loadAlerts(false);
-    }, [loadAvailability, loadAlerts]),
-  );
 
   useEffect(() => {
     loadAlerts();
